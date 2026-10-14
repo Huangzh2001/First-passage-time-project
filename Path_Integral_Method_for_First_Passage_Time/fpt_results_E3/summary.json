@@ -1,0 +1,15 @@
+{
+  "n": 50000,
+  "dt": 5e-05,
+  "t_max": 10.0,
+  "seed": 20261010,
+  "x0": 0.5,
+  "beta": 1.0,
+  "method": "Euler; endpoint crossing detection",
+  "reached": 8620,
+  "absorbed_at_zero": 0,
+  "still_running": 41380,
+  "max_survival_error": 0.0020506322431101953,
+  "theory_survival_source": "numerical integral of E1",
+  "density_source": "inverse of input F(s)"
+}
