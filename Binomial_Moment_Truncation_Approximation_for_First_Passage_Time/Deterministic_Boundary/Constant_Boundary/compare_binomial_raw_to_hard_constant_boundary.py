@@ -558,4 +558,8 @@ linewidth=2.0,
         HERE / "constant_boundary_comparison.pdf",
         bbox_inches="tight",
     )
+    fig.savefig(
+    HERE / "constant_boundary_comparison.svg",
+    bbox_inches="tight",
+)
     plt.show()

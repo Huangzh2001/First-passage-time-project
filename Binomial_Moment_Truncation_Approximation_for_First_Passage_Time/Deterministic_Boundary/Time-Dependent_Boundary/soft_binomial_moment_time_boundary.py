@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from scipy.linalg import expm
 from typing import Callable
 from scipy.optimize import brentq
-
+from scipy.integrate import solve_ivp
 
 BoundaryFunction = Callable[[float], float]
 
@@ -287,6 +287,23 @@ def initial_a_N(N, n0, p_off0=1.0, p_on0=0.0):
 
     return a0
 
+def propagate_radau(L, dt, a_start):
+    sol = solve_ivp(
+        lambda s, a: L @ a,
+        (0.0, float(dt)),
+        a_start,
+        method="Radau",
+        jac=L,
+        t_eval=[float(dt)],
+        rtol=1e-9,
+        atol=1e-12,
+    )
+
+    if not sol.success:
+        raise RuntimeError(sol.message)
+
+    return sol.y[:, -1]
+
 
 def soft_survival_time_boundary(
     t_grid,
@@ -393,9 +410,10 @@ def soft_survival_time_boundary(
 
                 dt = switch_time - current_time
 
-                a_t = expm(
-                    dt * L_current
-                ) @ a_t
+                # a_t = expm(
+                #     dt * L_current
+                # ) @ a_t
+                a_t = propagate_radau(L_current, dt, a_t)
 
                 current_time = switch_time
 
@@ -424,10 +442,10 @@ def soft_survival_time_boundary(
 
             dt = target_time - current_time
 
-            a_t = expm(
-                dt * L_current
-            ) @ a_t
-
+            # a_t = expm(
+            #     dt * L_current
+            # ) @ a_t
+            a_t = propagate_radau(L_current, dt, a_t)
             current_time = target_time
 
         # a_t = expm(t * L) @ a0

@@ -3,7 +3,30 @@ import importlib.util
 
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "font.family": "STIXGeneral",
+    "mathtext.fontset": "stix",
+    "font.size": 8,
+    "axes.labelsize": 9,
+    "axes.titlesize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 7,
+    "legend.frameon": False,
+    "axes.linewidth": 0.7,
+    "lines.linewidth": 1.2,
+    "xtick.direction": "in",
+    "ytick.direction": "in",
+    "axes.grid": False,
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+})
 
+plt.rcParams["axes.prop_cycle"] = plt.cycler(
+    color=["#4C78A8", "#59A14F", "#E15759"]
+)
+
+HERE = Path(__file__).resolve().parent
 
 
 # ============================================================
@@ -61,10 +84,7 @@ t_grid = np.linspace(
 # Soft-killing parameters
 gamma_values = [
     0.5,
-    1.0,
     2.0,
-    4.0,
-    6.0,
     8.0,
 ]
 
@@ -458,7 +478,7 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(
         2,
         2,
-        figsize=(14, 10),
+        figsize=(7.2, 5.2),
     )
 
     # ========================================================
@@ -472,44 +492,28 @@ if __name__ == "__main__":
         ci_lower,
         ci_upper,
         step="post",
-        color="gray",
-        alpha=0.3,
-        label="SSA pointwise 95% CI",
+        color="0.5",
+        alpha=0.4,
+        label="_nolegend_",
     )
 
     ax.step(
         t_grid,
         H_hard,
         where="post",
-        color="black",
-        linewidth=2.5,
-        label=r"$H_{\mathrm{hard}}^{\mathrm{SSA}}(t)$",
+        color="0.5",
+        linestyle=":",
+        linewidth=2.0,
+        label="Hard SSA",
     )
 
     for gamma in gamma_values:
 
         result = binomial_results[gamma]
 
-        linestyle = (
-            "-"
-            if result["converged"]
-            else "--"
-        )
+        linestyle = "-"
 
-        if result["converged"]:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"N^*={result['N']}$"
-            )
-
-        else:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"\mathrm{{fallback}}\ "
-                fr"N={result['N']}$"
-            )
+        label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -520,64 +524,49 @@ if __name__ == "__main__":
         )
 
     ax.set_title(
-        "Binomial moments vs hard SSA"
+        "(a) Binomial moments survival probability",
+        loc="left", x=-0.06, y=1.04, fontsize=11
     )
 
     ax.set_xlabel("t")
     ax.set_ylabel("Survival probability")
     ax.set_ylim(0.0, 1.02)
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+ 
 
     # ========================================================
     # Upper-right: raw survival versus hard SSA
     # ========================================================
 
-    ax = axes[0, 1]
+    ax = axes[1, 0]
 
     ax.fill_between(
         t_grid,
         ci_lower,
         ci_upper,
         step="post",
-        color="gray",
-        alpha=0.3,
-        label="SSA pointwise 95% CI",
+        color="0.5",
+        alpha=0.4,
+        label="_nolegend_",
     )
 
     ax.step(
         t_grid,
         H_hard,
         where="post",
-        color="black",
-        linewidth=2.5,
-        label=r"$H_{\mathrm{hard}}^{\mathrm{SSA}}(t)$",
+        color="0.5",
+        linestyle=":",
+        linewidth=2.0,
+        label="Hard SSA",
     )
 
     for gamma in gamma_values:
 
         result = raw_results[gamma]
 
-        linestyle = (
-            "-"
-            if result["converged"]
-            else "--"
-        )
+        linestyle = "-"
 
-        if result["converged"]:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"N^*={result['N']}$"
-            )
-
-        else:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"\mathrm{{fallback}}\ "
-                fr"N={result['N']}$"
-            )
+        label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -588,54 +577,39 @@ if __name__ == "__main__":
         )
 
     ax.set_title(
-        "Raw moments vs hard SSA"
+        "(c) Raw moments survival probability",
+        loc="left", x=-0.06, y=1.04, fontsize=11
     )
 
     ax.set_xlabel("t")
     ax.set_ylabel("Survival probability")
     ax.set_ylim(0.0, 1.02)
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+ 
 
     # ========================================================
     # Lower-left: binomial soft density and SSA histogram
     # ========================================================
 
-    ax = axes[1, 0]
+    ax = axes[0, 1]
 
     ax.stairs(
         f_hard,
         density_bin_edges,
-        color="black",
+        color="0.5",
+        linestyle=":",
         linewidth=2.0,
         fill=False,
-        label="Hard SSA histogram density",
+        label="Hard SSA",
     )
 
     for gamma in gamma_values:
 
         result = binomial_results[gamma]
 
-        linestyle = (
-            "-"
-            if result["converged"]
-            else "--"
-        )
+        linestyle = "-"
 
-        if result["converged"]:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"N^*={result['N']}$"
-            )
-
-        else:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"\mathrm{{fallback}}\ "
-                fr"N={result['N']}$"
-            )
+        label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -646,13 +620,14 @@ if __name__ == "__main__":
         )
 
     ax.set_title(
-        "Binomial soft FPT density"
+        "(b) Binomial moment FPT density",
+        loc="left", x=-0.06, y=1.04, fontsize=11
     )
 
     ax.set_xlabel("t")
     ax.set_ylabel("Density")
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+ 
 
     # ========================================================
     # Lower-right: raw soft density and SSA histogram
@@ -663,36 +638,20 @@ if __name__ == "__main__":
     ax.stairs(
         f_hard,
         density_bin_edges,
-        color="black",
+        color="0.5",
+        linestyle=":",
         linewidth=2.0,
         fill=False,
-        label="Hard SSA histogram density",
+        label="Hard SSA",
     )
 
     for gamma in gamma_values:
 
         result = raw_results[gamma]
 
-        linestyle = (
-            "-"
-            if result["converged"]
-            else "--"
-        )
+        linestyle = "-"
 
-        if result["converged"]:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"N^*={result['N']}$"
-            )
-
-        else:
-
-            label = (
-                fr"$\gamma={gamma},\ "
-                fr"\mathrm{{fallback}}\ "
-                fr"N={result['N']}$"
-            )
+        label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -703,27 +662,60 @@ if __name__ == "__main__":
         )
 
     ax.set_title(
-        "Raw soft FPT density"
+        "(d) Raw moments FPT density",
+        loc="left", x=-0.06, y=1.04, fontsize=11
     )
 
     ax.set_xlabel("t")
     ax.set_ylabel("Density")
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+ 
 
     # ========================================================
     # 6. Overall title and layout
     # ========================================================
 
-    fig.suptitle(
-        "Time-dependent boundary: "
-        "binomial and raw moments vs hard SSA\n"
-        r"$B(t)=\lceil\beta(t)\rceil$",
-        fontsize=14,
+    density_top = max(
+        axes[0, 1].get_ylim()[1],
+        axes[1, 1].get_ylim()[1],
     )
 
-    fig.tight_layout(
-        rect=(0.0, 0.0, 1.0, 0.95)
+    for row in range(2):
+        axes[row, 0].set_ylabel(r"$H(t)$")
+        axes[row, 1].set_ylabel(r"$f_T(t)$")
+
+        axes[row, 0].set_ylim(0, 1)
+        axes[row, 1].set_ylim(0, density_top)
+
+        for col in range(2):
+            axes[row, col].set_xlabel(r"$t$")
+            axes[row, col].tick_params(
+                which="both", top=False, right=False
+            )
+            axes[row, col].spines["top"].set_visible(False)
+            axes[row, col].spines["right"].set_visible(False)
+
+    axes[0, 1].legend(
+        loc="upper right",
+        frameon=False,
+        fontsize=7,
+    )
+
+    fig.tight_layout()
+
+    fig.savefig(
+        HERE / "time_boundary_comparison.pdf",
+        bbox_inches="tight",
+    )
+
+    fig.savefig(
+        HERE / "time_boundary_comparison.png",
+        dpi=900,
+        bbox_inches="tight",
+    )
+    fig.savefig(
+        HERE / "time_boundary_comparison.svg",
+        bbox_inches="tight",
     )
 
     plt.show()
