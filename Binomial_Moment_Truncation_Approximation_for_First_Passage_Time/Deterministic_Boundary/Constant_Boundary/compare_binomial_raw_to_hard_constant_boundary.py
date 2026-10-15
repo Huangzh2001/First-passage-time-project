@@ -3,8 +3,27 @@ import importlib.util
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-
+plt.rcParams.update({
+    "font.family": "STIXGeneral",
+    "mathtext.fontset": "stix",
+    "font.size": 8,
+    "axes.labelsize": 9,
+    "axes.titlesize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 7,
+    "legend.frameon": False,
+    "axes.linewidth": 0.7,
+    "lines.linewidth": 1.2,
+    "xtick.direction": "in",
+    "ytick.direction": "in",
+    "axes.grid": False,
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+})
+plt.rcParams["axes.prop_cycle"] = plt.cycler(
+    color=["#4C78A8", "#59A14F", "#E15759"]
+)
 
 # ============================================================
 # Load the three existing calculation files from this folder
@@ -57,10 +76,10 @@ p_on0 = 0.0
 t_grid = np.linspace(0.0, 200.0, 2001)
 
 # gamma keeps increasing
-gamma_values = [0.5, 1.0, 2.0, 4.0, 6.0, 8.0]
+gamma_values = [0.5, 2.0, 8.0]
 
 # For each fixed gamma, increase N
-N_values = list(range(B, 30, 2))
+N_values = list(range(B, 90, 2))
 
 # Require two consecutive N-errors below this threshold
 tol_N = 1e-6
@@ -331,7 +350,7 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(
         2,
         2,
-        figsize=(14, 10),
+        figsize=(7.2, 5.2),
     )
 
     # ---------------- Binomial ----------------
@@ -341,8 +360,9 @@ if __name__ == "__main__":
     ax.plot(
         t_grid,
         H_hard,
-        "k-",
-        linewidth=2.5,
+        color="0.5",
+linestyle=":",
+linewidth=2.0,
         label="Hard exact",
     )
 
@@ -350,12 +370,12 @@ if __name__ == "__main__":
 
         result = binomial_results[gamma]
 
-        linestyle = "-" if result["converged"] else "--"
+        linestyle = "-"
 
         if result["converged"]:
-            label = fr"$\gamma={gamma},\ N^*={result['N']}$"
+            label = fr"$\gamma={gamma:g}$"
         else:
-            label = fr"$\gamma={gamma},\ N={result['N']}$"
+            label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -364,21 +384,25 @@ if __name__ == "__main__":
             label=label,
         )
 
-    ax.set_title("Binomial moments vs Hard exact")
+    ax.set_title(
+    "(a) Binomial moments survival probability",
+    loc="left", x=-0.06, y=1.04, fontsize=11
+)
     ax.set_xlabel("t")
     ax.set_ylabel("Survival H(t)")
-    ax.grid(True)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+    
 
     # ---------------- Raw ----------------
 
-    ax = axes[0,1]
+    ax = axes[1,0]
 
     ax.plot(
         t_grid,
         H_hard,
-        "k-",
-        linewidth=2.5,
+        color="0.5",
+linestyle=":",
+linewidth=2.0,
         label="Hard exact",
     )
 
@@ -386,12 +410,12 @@ if __name__ == "__main__":
 
         result = raw_results[gamma]
 
-        linestyle = "-" if result["converged"] else "--"
+        linestyle = "-"
 
         if result["converged"]:
-            label = fr"$\gamma={gamma},\ N^*={result['N']}$"
+            label = fr"$\gamma={gamma:g}$"
         else:
-            label = fr"$\gamma={gamma},\ N={result['N']}$"
+            label = fr"$\gamma={gamma:g}$"
 
         ax.plot(
             t_grid,
@@ -400,26 +424,29 @@ if __name__ == "__main__":
             label=label,
         )
 
-    ax.set_title("Raw moments vs Hard exact")
+    ax.set_title(
+        "(c) Raw moments survival probability",
+        loc="left", x=-0.06, y=1.04, fontsize=11
+    )
     ax.set_xlabel("t")
-    ax.grid(True)
-    ax.legend(fontsize=8)
+    ax.grid(False)
+    
 
     # ---------------- Binomial density ----------------
 
-    ax = axes[1,0]
+    ax = axes[0,1]
 
     for gamma in gamma_values:
 
         result = binomial_results[gamma]
 
-        linestyle = "-" if result["converged"] else "--"
+        linestyle = "-"
 
         label = (
-            fr"$\gamma={gamma},\ N^*={result['N']}$"
+            fr"$\gamma={gamma:g}$"
             if result["converged"]
             else
-            fr"$\gamma={gamma},\ N={result['N']}$"
+            fr"$\gamma={gamma:g}$"
         )
 
         ax.plot(
@@ -432,20 +459,24 @@ if __name__ == "__main__":
     ax.plot(
                 t_grid,
                 f_hard,
-                "k-",
-                linewidth=2.5,
+                color="0.5",
+linestyle=":",
+linewidth=2.0,
                 label="Hard exact",
             )    
 
-    ax.set_title("Binomial FPT density")
+    ax.set_title(
+        "(b) Binomial moment FPT density",
+        loc="left", x=-0.06, y=1.04, fontsize=11
+    )
 
     ax.set_xlabel("t")
 
     ax.set_ylabel("f(t)")
 
-    ax.grid(True)
+    ax.grid(False)
 
-    ax.legend(fontsize=8)
+    
 
     # ---------------- Raw density ----------------
 
@@ -455,13 +486,13 @@ if __name__ == "__main__":
 
         result = raw_results[gamma]
 
-        linestyle = "-" if result["converged"] else "--"
+        linestyle = "-"
 
         label = (
-            fr"$\gamma={gamma},\ N^*={result['N']}$"
+            fr"$\gamma={gamma:g}$"
             if result["converged"]
             else
-            fr"$\gamma={gamma},\ N={result['N']}$"
+            fr"$\gamma={gamma:g}$"
         )
 
         ax.plot(
@@ -474,26 +505,57 @@ if __name__ == "__main__":
     ax.plot(
                 t_grid,
                 f_hard,
-                "k-",
-                linewidth=2.5,
+                color="0.5",
+linestyle=":",
+linewidth=2.0,
                 label="Hard exact",
             )    
 
-    ax.set_title("Raw FPT density")
+    ax.set_title(
+        "(d) Raw moments FPT density",
+        loc="left", x=-0.06, y=1.04, fontsize=11
+    )
 
     ax.set_xlabel("t")
 
     ax.set_ylabel("f(t)")
 
-    ax.grid(True)
+    ax.grid(False)
 
-    ax.legend(fontsize=8)
+    
+    for row in range(2):
+        axes[row, 0].set_ylabel(r"$H(t)$")
+        axes[row, 1].set_ylabel(r"$f_T(t)$")
 
-    fig.suptitle(
-        "Constant-boundary comparison: "
-        "gamma increases, adaptive N for each gamma"
+        axes[row, 0].set_ylim(0, 1)
+        axes[row, 1].set_ylim(0, 0.10)
+
+        for col in range(2):
+            axes[row, col].set_xlabel(r"$t$")
+            axes[row, col].tick_params(
+                which="both", top=False, right=False
+            )
+            axes[row, col].spines["top"].set_visible(False)
+            axes[row, col].spines["right"].set_visible(False)
+
+    handles, labels = axes[0, 1].get_legend_handles_labels()
+
+    axes[0, 1].legend(
+        [handles[-1]] + handles[:-1],
+        [labels[-1]] + labels[:-1],
+        loc="upper right",
+        frameon=False,
+        fontsize=7,
     )
 
     fig.tight_layout()
-
+    fig.savefig(
+        HERE / "constant_boundary_comparison.png",
+        dpi=900,
+        bbox_inches="tight",
+    )
+    fig.savefig(
+        HERE / "constant_boundary_comparison.pdf",
+        bbox_inches="tight",
+    )
     plt.show()

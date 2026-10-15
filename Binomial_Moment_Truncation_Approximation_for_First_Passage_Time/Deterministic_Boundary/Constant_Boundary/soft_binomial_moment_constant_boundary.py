@@ -5,6 +5,7 @@ from scipy.sparse.linalg import expm_multiply
 import multiprocessing as mp
 from scipy.sparse import csr_matrix
 from scipy.linalg import expm
+from scipy.integrate import solve_ivp
 
 def build_L_N(B, N, gamma, k1, k2, mu, delta, theta=0.5):
     """
@@ -159,9 +160,23 @@ def soft_survival_truncated(
     H = np.empty(len(t_grid), dtype=float)
     f = np.empty(len(t_grid), dtype=float)
 
+    sol = solve_ivp(
+        lambda t, a: L @ a,
+        (0.0, float(t_grid[-1])),
+        a0,
+        method="Radau",
+        jac=L,
+        t_eval=t_grid,
+        rtol=1e-9,
+        atol=1e-12,
+    )
+    if not sol.success:
+        raise RuntimeError(sol.message)
+
     for j, t in enumerate(t_grid):
 
-        a_t = expm(t * L) @ a0
+        # a_t = expm(t * L) @ a0
+        a_t = sol.y[:, j]
 
         H[j] = a_t[0] + a_t[1]
 
