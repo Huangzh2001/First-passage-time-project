@@ -1,0 +1,12 @@
+{
+  "status": "complete",
+  "key": {
+    "gamma": 64.0,
+    "M": 3,
+    "K": 64,
+    "dt": 0.0025,
+    "quadrature": 0
+  },
+  "finished": "2026-10-14T13:37:27.327261+00:00",
+  "sha256": "a6f63b1be3aa70f629b330974fea7ba25a2e5679064f4c2951d5367cd52151b9"
+}

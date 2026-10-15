@@ -1,0 +1,90 @@
+[
+  {
+    "id": "P01_baseline",
+    "label": "原参数、平稳初值",
+    "status": "NEEDS_MORE_RESOLUTION_OR_CHECKS",
+    "flags": [
+      "MC_STEP_OR_SAMPLING_UNCERTAINTY"
+    ],
+    "shape_a": 1.0,
+    "shape_b": 1.0,
+    "K_last_step_max": 3.3879810068526695e-10,
+    "M_last_step_max": 3.3306690738754696e-16,
+    "ODE_halfstep_max": 1.0193489630161423e-07,
+    "quadrature_max": 2.1354445989274495e-10,
+    "final_gamma": 64.0,
+    "final_K": 64,
+    "final_M": 12,
+    "last": {
+      "gamma": 64.0,
+      "H_T": 0.2717846625377773,
+      "H_MC_hard_T": 0.27255789584485546,
+      "SE_hard_T": 0.0012842251942218272,
+      "sup_vs_MC_hard": 0.0017883118512627139,
+      "sup_vs_MC_soft": 0.0015076888309618064,
+      "MC_soft_excess_4SE": 0.0,
+      "MC_refinement_sup": 0.005215155528373372,
+      "min_H": 0.2717846625377773,
+      "max_H": 1.0
+    },
+    "note": "有限分辨率诊断，不是无穷极限证明；4SE不是同时置信带；MC粗细差包含统计波动"
+  },
+  {
+    "id": "P02_slow_boundary",
+    "label": "较慢的Jacobi边界",
+    "status": "NEEDS_MORE_RESOLUTION_OR_CHECKS",
+    "flags": [
+      "SOFT_HARD_NOT_YET_CLOSE"
+    ],
+    "shape_a": 0.9999999999999998,
+    "shape_b": 0.9999999999999998,
+    "K_last_step_max": 1.6717968676083217e-09,
+    "M_last_step_max": 2.220446049250313e-16,
+    "ODE_halfstep_max": 1.0055038779377412e-07,
+    "quadrature_max": 1.4143944349065407e-09,
+    "final_gamma": 64.0,
+    "final_K": 64,
+    "final_M": 12,
+    "last": {
+      "gamma": 64.0,
+      "H_T": 0.29473661222404723,
+      "H_MC_hard_T": 0.3036485390061037,
+      "SE_hard_T": 0.001326872185559523,
+      "sup_vs_MC_hard": 0.009128998012176481,
+      "sup_vs_MC_soft": 0.0035426907927054163,
+      "MC_soft_excess_4SE": 0.0,
+      "MC_refinement_sup": 0.004783915597428412,
+      "min_H": 0.29473661222404723,
+      "max_H": 1.0
+    },
+    "note": "有限分辨率诊断，不是无穷极限证明；4SE不是同时置信带；MC粗细差包含统计波动"
+  },
+  {
+    "id": "P03_fast_reactions",
+    "label": "较快反应",
+    "status": "NUMERICAL_SUPPORT",
+    "flags": [],
+    "shape_a": 1.0,
+    "shape_b": 1.0,
+    "K_last_step_max": 6.473765967740519e-10,
+    "M_last_step_max": 2.220446049250313e-16,
+    "ODE_halfstep_max": 8.476571032867142e-07,
+    "quadrature_max": 2.911709207076285e-10,
+    "final_gamma": 64.0,
+    "final_K": 64,
+    "final_M": 12,
+    "last": {
+      "gamma": 64.0,
+      "H_T": 0.037058386432632415,
+      "H_MC_hard_T": 0.036597710323713575,
+      "SE_hard_T": 0.0005415325821339109,
+      "sup_vs_MC_hard": 0.001398045769225753,
+      "sup_vs_MC_soft": 0.0025015410769367863,
+      "MC_soft_excess_4SE": 0.0,
+      "MC_refinement_sup": 0.002402241130094407,
+      "min_H": 0.037058386432632415,
+      "max_H": 1.0
+    },
+    "note": "有限分辨率诊断，不是无穷极限证明；4SE不是同时置信带；MC粗细差包含统计波动"
+  }
+]

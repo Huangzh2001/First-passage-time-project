@@ -1,0 +1,30 @@
+{
+  "id": "P01_baseline",
+  "label": "原参数、平稳初值",
+  "status": "NEEDS_MORE_RESOLUTION_OR_CHECKS",
+  "flags": [
+    "MC_STEP_OR_SAMPLING_UNCERTAINTY"
+  ],
+  "shape_a": 1.0,
+  "shape_b": 1.0,
+  "K_last_step_max": 3.3879810068526695e-10,
+  "M_last_step_max": 3.3306690738754696e-16,
+  "ODE_halfstep_max": 1.0193489630161423e-07,
+  "quadrature_max": 2.1354445989274495e-10,
+  "final_gamma": 64.0,
+  "final_K": 64,
+  "final_M": 12,
+  "last": {
+    "gamma": 64.0,
+    "H_T": 0.2717846625377773,
+    "H_MC_hard_T": 0.27255789584485546,
+    "SE_hard_T": 0.0012842251942218272,
+    "sup_vs_MC_hard": 0.0017883118512627139,
+    "sup_vs_MC_soft": 0.0015076888309618064,
+    "MC_soft_excess_4SE": 0.0,
+    "MC_refinement_sup": 0.005215155528373372,
+    "min_H": 0.2717846625377773,
+    "max_H": 1.0
+  },
+  "note": "有限分辨率诊断，不是无穷极限证明；4SE不是同时置信带；MC粗细差包含统计波动"
+}

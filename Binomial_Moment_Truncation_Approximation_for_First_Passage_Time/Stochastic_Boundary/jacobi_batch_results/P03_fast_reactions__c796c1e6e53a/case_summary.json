@@ -1,0 +1,28 @@
+{
+  "id": "P03_fast_reactions",
+  "label": "较快反应",
+  "status": "NUMERICAL_SUPPORT",
+  "flags": [],
+  "shape_a": 1.0,
+  "shape_b": 1.0,
+  "K_last_step_max": 6.473765967740519e-10,
+  "M_last_step_max": 2.220446049250313e-16,
+  "ODE_halfstep_max": 8.476571032867142e-07,
+  "quadrature_max": 2.911709207076285e-10,
+  "final_gamma": 64.0,
+  "final_K": 64,
+  "final_M": 12,
+  "last": {
+    "gamma": 64.0,
+    "H_T": 0.037058386432632415,
+    "H_MC_hard_T": 0.036597710323713575,
+    "SE_hard_T": 0.0005415325821339109,
+    "sup_vs_MC_hard": 0.001398045769225753,
+    "sup_vs_MC_soft": 0.0025015410769367863,
+    "MC_soft_excess_4SE": 0.0,
+    "MC_refinement_sup": 0.002402241130094407,
+    "min_H": 0.037058386432632415,
+    "max_H": 1.0
+  },
+  "note": "有限分辨率诊断，不是无穷极限证明；4SE不是同时置信带；MC粗细差包含统计波动"
+}

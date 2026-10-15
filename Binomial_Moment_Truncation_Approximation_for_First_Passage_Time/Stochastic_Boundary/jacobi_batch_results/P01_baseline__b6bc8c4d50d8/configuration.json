@@ -1,0 +1,66 @@
+{
+  "model": {
+    "beta_minus": 2.75,
+    "beta_plus": 3.25,
+    "kappa": 1.0,
+    "theta": 0.5,
+    "sigma": 1.0,
+    "k1": 0.7,
+    "k2": 0.8,
+    "mu": 2.0,
+    "delta": 0.5,
+    "N0": 0,
+    "p_on0": 1.0,
+    "T": 6.0,
+    "initial_kind": "stationary",
+    "initial_lo": null,
+    "initial_hi": null
+  },
+  "settings": {
+    "gammas": [
+      2.0,
+      4.0,
+      8.0,
+      16.0,
+      32.0,
+      64.0
+    ],
+    "K_values": [
+      4,
+      8,
+      12,
+      20,
+      32,
+      48,
+      64
+    ],
+    "M_values": [
+      2,
+      3,
+      4,
+      6,
+      8,
+      10,
+      12
+    ],
+    "observation_dt": 0.05,
+    "ode_dt": 0.0025,
+    "mc_coarse_dt": 0.002,
+    "mc_fine_dt": 0.001,
+    "coarse_paths": 60000,
+    "fine_paths": 120000,
+    "mc_batch_size": 5000
+  },
+  "label": "原参数、平稳初值",
+  "seed": 20261009,
+  "shape_a": 1.0,
+  "shape_b": 1.0,
+  "fingerprint": "b6bc8c4d50d8ccb667125c60fb3e4f07fb6fd5b4fb69bf08999dcad4257cbb69",
+  "algorithm_hash": "b199e8a576c86b4038d8b8a34083e30ad747f1f424fcc09582a0ab6596565439",
+  "source_hash": "649d1d0383e3cccfb033881b232159bd306e61dfde72ffb5db56014f89239a4d",
+  "numerical_environment": {
+    "numpy": "2.1.3",
+    "scipy": "1.15.3"
+  },
+  "started": "2026-10-14T13:10:53.562326+00:00"
+}

@@ -1,0 +1,13 @@
+﻿gamma,check,sup_difference
+2.0,ODE_halfstep,9.357521923991641e-08
+2.0,quadrature_doubled,4.440892098500626e-16
+4.0,ODE_halfstep,1.000886449276095e-07
+4.0,quadrature_doubled,3.552713678800501e-15
+8.0,ODE_halfstep,1.0055038779377412e-07
+8.0,quadrature_doubled,9.992007221626409e-16
+16.0,ODE_halfstep,9.601886485910427e-08
+16.0,quadrature_doubled,1.6653345369377348e-15
+32.0,ODE_halfstep,8.904823034505682e-08
+32.0,quadrature_doubled,1.1712852909795402e-13
+64.0,ODE_halfstep,8.414780450216597e-08
+64.0,quadrature_doubled,1.4143944349065407e-09

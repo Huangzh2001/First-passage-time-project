@@ -1,0 +1,16 @@
+{
+  "status": "complete",
+  "key": {
+    "stage": "fine",
+    "chunk": 10,
+    "paths": 5000,
+    "dt": 0.001,
+    "seed_words": [
+      20263009,
+      1,
+      10
+    ]
+  },
+  "finished": "2026-10-14T13:34:18.372568+00:00",
+  "sha256": "09ba1bd1262b5b9022fe4ecb29e8225fa6829bb3781891c7cf47bd99cd53bdac"
+}

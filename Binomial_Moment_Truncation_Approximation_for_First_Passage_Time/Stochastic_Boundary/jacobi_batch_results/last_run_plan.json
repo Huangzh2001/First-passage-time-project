@@ -1,0 +1,102 @@
+{
+  "cases": [
+    {
+      "id": "P01_baseline",
+      "label": "原参数、平稳初值",
+      "seed": 20261009
+    },
+    {
+      "id": "P02_slow_boundary",
+      "label": "较慢的Jacobi边界",
+      "seed": 20262009,
+      "kappa": 0.16,
+      "sigma": 0.4,
+      "T": 6.0
+    },
+    {
+      "id": "P03_fast_reactions",
+      "label": "较快反应",
+      "seed": 20263009,
+      "mu": 5.0,
+      "delta": 0.8,
+      "k1": 0.5,
+      "k2": 1.2,
+      "T": 4.0
+    },
+    {
+      "id": "P04_asymmetric",
+      "label": "不对称Jacobi边界",
+      "seed": 20264009,
+      "kappa": 1.2,
+      "theta": 0.7,
+      "sigma": 0.8,
+      "T": 6.0
+    },
+    {
+      "id": "P05_near_hit_peak",
+      "label": "接近越界的非平稳集中初值",
+      "seed": 20265009,
+      "N0": 3,
+      "T": 2.0,
+      "initial_kind": "uniform_window",
+      "initial_lo": 3.005,
+      "initial_hi": 3.015,
+      "M_values": [
+        3,
+        4,
+        6,
+        8,
+        12
+      ]
+    }
+  ],
+  "settings": {
+    "gammas": [
+      2.0,
+      4.0,
+      8.0,
+      16.0,
+      32.0,
+      64.0
+    ],
+    "K_values": [
+      4,
+      8,
+      12,
+      20,
+      32,
+      48,
+      64
+    ],
+    "M_values": [
+      2,
+      3,
+      4,
+      6,
+      8,
+      10,
+      12
+    ],
+    "observation_dt": 0.05,
+    "ode_dt": 0.0025,
+    "mc_coarse_dt": 0.002,
+    "mc_fine_dt": 0.001,
+    "coarse_paths": 60000,
+    "fine_paths": 120000,
+    "mc_batch_size": 5000
+  },
+  "tolerances": {
+    "K_step": 1e-05,
+    "M_step": 1e-05,
+    "ODE_step": 1e-06,
+    "quadrature": 1e-06,
+    "soft_hard": 0.005,
+    "soft_MC_excess": 0.001,
+    "MC_step": 0.005,
+    "range": 1e-05
+  },
+  "quick": false,
+  "algorithm_hash": "b199e8a576c86b4038d8b8a34083e30ad747f1f424fcc09582a0ab6596565439",
+  "source_hash": "649d1d0383e3cccfb033881b232159bd306e61dfde72ffb5db56014f89239a4d",
+  "started": "2026-10-14T13:10:53.553608+00:00"
+}
