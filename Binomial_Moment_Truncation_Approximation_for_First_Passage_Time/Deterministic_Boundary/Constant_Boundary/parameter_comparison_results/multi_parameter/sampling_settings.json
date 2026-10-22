@@ -1,0 +1,39 @@
+{
+  "base_sample_size": 64,
+  "design_evaluations": 768,
+  "seed": 2026,
+  "input_ranges": {
+    "k1": [
+      0.2,
+      6.0
+    ],
+    "k2": [
+      0.2,
+      6.0
+    ],
+    "mu": [
+      1.0,
+      50.0
+    ],
+    "delta": [
+      0.2,
+      5.0
+    ],
+    "B": [
+      4,
+      20
+    ]
+  },
+  "log_parameters": [
+    "k1",
+    "k2",
+    "delta"
+  ],
+  "B_distribution": "independent discrete uniform integer",
+  "response_time": 20.0,
+  "valid_hard": 768,
+  "valid_soft": 768,
+  "soft_sobol_available": true,
+  "warning": "Sobol estimates are exploratory at low N; no missing-data imputation.",
+  "cache_signature": "cc9344f992b0"
+}
