@@ -42,8 +42,8 @@ N_MIN, N_MAX, N_STEP, TOL = 12, 30, 2, 1e-6
 T_END, T_STAR, FPT_XMAX = 200.0, 20.0, 50.0
 OUT = HERE / "parameter_comparison_results"
 # ------ 新增的多参数分析设置（控制计算量：2**POWER * (2*5+2)）------
-RUN_SINGLE, RUN_DOUBLE, RUN_MULTI = True, True, True
-MULTI_POWER = 6  # 2**6=64基础样本，共768个设计求值；正式研究建议8或更大
+RUN_SINGLE, RUN_DOUBLE, RUN_MULTI = False, False, True
+MULTI_POWER = 10  # 2**6=64基础样本，共768个设计求值；正式研究建议8或更大
 MULTI_SEED = 2026  # 不变则支持断点复用；增加 POWER 可复用之前已有的参数计算
 MULTI_PARALLEL_LINES = 80  # 平行坐标图最多展示80条线，不画全部线
 MULTI_RANGES = dict(k1=(0.2, 6.0), k2=(0.2, 6.0), mu=(1.0, 50.0),
@@ -138,8 +138,27 @@ def sobol_indices(y):
             s2[j,k] = np.mean(ba[:,j]*ab[:,k]-a*b)/v - s1[j]-s1[k]
     return dict(S1=s1, ST=st, S2=s2)
 
+def sobol_bootstrap_errorbars(y, repeats=500, seed=2026):
+    if not np.all(np.isfinite(y)):
+        return None
+    rng = np.random.default_rng(seed)
+    m, _, _ = y.shape
+    samples = {
+        k: np.empty((repeats, 3, (y.shape[1]-2)//2))
+        for k in ("S1", "ST")
+    }
+    for r in range(repeats):
+        idx = rng.integers(0, m, m)
+        h = sobol_indices(y[idx, :, 0])
+        s = sobol_indices(y[idx, :, 1])
+        if h is None or s is None:
+            return None
+        for k in samples:
+            samples[k][r] = np.stack((h[k], s[k], s[k]-h[k]))
+    return {k: 1.96*v.std(axis=0, ddof=1) for k, v in samples.items()}
 
-def plot_multi_sobol(names, hard_si, soft_si, folder):
+
+def plot_multi_sobol(names, hard_si, soft_si, folder, errors=None):
     """输出两张三列图：一阶/总效应柱状图、二阶交互热力图。"""
     labels = [symbol(k) for k in names]
     diff = None if hard_si is None or soft_si is None else {
@@ -156,8 +175,15 @@ def plot_multi_sobol(names, hard_si, soft_si, folder):
             ax.text(.5,.5,"Unavailable: incomplete / constant output", ha="center",va="center",
                     transform=ax.transAxes,fontsize=10,wrap=True)
             continue
-        ax.bar(x-.19, si["S1"], width=.37, label=r"$S_1$", color="#3274a1")
-        ax.bar(x+.19, si["ST"], width=.37, label=r"$S_T$", color="#e1812c")
+        ax.bar(x-.19, si["S1"], width=.37, label=r"$S_1$",
+            color="#3274a1",
+            yerr=None if errors is None else errors["S1"][i],
+            capsize=3, ecolor="black")
+
+        ax.bar(x+.19, si["ST"], width=.37, label=r"$S_T$",
+            color="#e1812c",
+            yerr=None if errors is None else errors["ST"][i],
+       capsize=3, ecolor="black")
         ax.axhline(0,color="0.35",lw=.8)
         ax.set_ylabel("Sobol index difference" if i==2 else "Sobol index estimate")
         if i == 0:
@@ -166,7 +192,7 @@ def plot_multi_sobol(names, hard_si, soft_si, folder):
     save_fig(fig, folder, "sobol_first_total")
 
     fig, axs = plt.subplots(1,3,figsize=(14,4.5),layout="constrained")
-    mask = ~np.triu(np.ones((len(names),len(names)), dtype=bool), k=1)
+    mask = np.eye(len(names), dtype=bool)
     available = [si["S2"][~mask] for si in (hard_si,soft_si) if si is not None]
     common = max((float(np.nanmax(np.abs(v))) for v in available if v.size), default=0.0)
     common = max(common, 1e-8)
@@ -178,70 +204,111 @@ def plot_multi_sobol(names, hard_si, soft_si, folder):
             ax.text(.5,.5,"Unavailable: incomplete / constant output",ha="center",va="center",
                     transform=ax.transAxes, fontsize=10,wrap=True)
             continue
-        arr=si["S2"]
+        arr = np.nan_to_num(si["S2"], nan=0.0)
+        arr = arr + arr.T
         clim = common if i < 2 else max(float(np.nanmax(np.abs(arr[~mask]))),1e-8)
         im=ax.imshow(np.ma.masked_array(arr, mask=mask), cmap="coolwarm",
                      vmin=-clim,vmax=clim,interpolation="nearest")
         for j in range(len(names)):
-            for k in range(j+1,len(names)):
-                ax.text(k,j,f"{arr[j,k]:.2f}",ha="center",va="center",fontsize=8,
+            for k in range(len(names)):
+                if j == k:
+                    ax.text(k, j, "—", ha="center", va="center")
+                    continue
+                ax.text(k, j, f"{arr[j,k]:.2f}",
+                        ha="center", va="center", fontsize=8,
                         color="black" if abs(arr[j,k]) < .6*clim else "white")
         fig.colorbar(im,ax=ax,shrink=.72, label=r"$S_2$ difference" if i==2 else r"$S_2$ estimate")
     fig.suptitle(fr"Pairwise Sobol interactions, $H({T_STAR:g})$ (negative estimates = sampling noise)")
     save_fig(fig, folder, "sobol_second_order")
 
 
+
 def plot_multi_parallel(names, X, Y, folder):
-    """最多画 MULTI_PARALLEL_LINES 条，按 Hard 响应分位数均匀抽取以防视觉过密。"""
-    good = np.where(np.isfinite(Y[:,0]) & np.isfinite(Y[:,1]))[0]
-    if len(good):
-        ordered = good[np.argsort(Y[good,0])]
-        chosen = ordered[np.unique(np.linspace(0,len(ordered)-1,
-                              min(MULTI_PARALLEL_LINES,len(ordered))).round().astype(int))]
-    else:
-        chosen = np.array([],dtype=int)
-    xx = X[chosen]
-    resp = np.c_[Y[chosen,0],Y[chosen,1],Y[chosen,1]-Y[chosen,0]]
-    d=len(names)
-    scaled=np.zeros_like(xx)
-    for i,k in enumerate(names):
-        lo,hi=MULTI_RANGES[k]
-        if k in MULTI_LOG_PARAMETERS:
-            scaled[:,i] = np.log(xx[:,i]/lo)/np.log(hi/lo)
+    """五参数条件均值和条件标准差热力图，使用全部有效样本。"""
+    bins = 17
+    X, Y = np.asarray(X, float), np.asarray(Y, float)
+    valid = np.isfinite(X).all(axis=1) & np.isfinite(Y).all(axis=1)
+    X, Y = X[valid], Y[valid]
+
+    if len(X) == 0:
+        print("无有效配对样本，跳过热力图")
+        return
+
+    values = np.column_stack((Y[:, 0], Y[:, 1], Y[:, 1] - Y[:, 0]))
+    mean = np.full((3, len(names), bins), np.nan)
+    std = np.full_like(mean, np.nan)
+
+    labels = []
+    for i, name in enumerate(names):
+        lo, hi = MULTI_RANGES[name]
+        labels.append(fr"${SYMBOLS[name]}$  [{lo:g}, {hi:g}]")
+
+        if name in MULTI_LOG_PARAMETERS:
+            z = np.log(X[:, i] / lo) / np.log(hi / lo)
         else:
-            scaled[:,i] = (xx[:,i]-lo)/(hi-lo)
-    titles=("(a) Hard (exact)","(b) Binomial approximation","(c) Soft - Hard")
-    fig,axs=plt.subplots(1,3,figsize=(16,5),layout="constrained")
-    for col,ax in enumerate(axs):
-        ax.set_title(titles[col])
-        ax.set_xlim(-.1,d+.1)
-        ax.set_ylim(-.08,1.08)
-        ax.set_xticks(range(d+1),[symbol(k) for k in names]+[r"$H$" if col<2 else r"$\Delta H$"])
-        ax.set_yticks([0,.5,1],["low","middle","high"])
-        for k in range(d+1):
-            ax.axvline(k,color="0.75",lw=.8,zorder=0)
-            if k<d:
-                low,high=MULTI_RANGES[names[k]]
+            z = (X[:, i] - lo) / (hi - lo)
+
+        idx = np.minimum((np.clip(z, 0, 1) * bins).astype(int), bins - 1)
+
+        for j in range(bins):
+            subset = values[idx == j]
+            if len(subset):
+                mean[:, i, j] = subset.mean(axis=0)
+                std[:, i, j] = subset.std(axis=0)
+
+    titles = ("(a) Hard (exact)",
+              "(b) Binomial approximation",
+              "(c) Soft - Hard")
+
+    for kind, data, filename in (
+        ("Mean", mean, "parameter_mean_heatmap"),
+        ("Standard deviation", std, "parameter_std_heatmap")
+    ):
+        fig, axes = plt.subplots(
+            1, 3, figsize=(15, 4.5), layout="constrained"
+        )
+
+        common_std = max(float(np.nanmax(std[:2])), 1e-12)
+
+        for k, ax in enumerate(axes):
+            if kind == "Mean":
+                if k < 2:
+                    cmap, vmin, vmax = "viridis", 0, 1
+                else:
+                    limit = max(float(np.nanmax(np.abs(mean[2]))), 1e-12)
+                    cmap, vmin, vmax = "coolwarm", -limit, limit
             else:
-                low,high=(-1,1) if col==2 else (0,1)
-            ax.text(k,1.015,f"{high:g}",ha="center",va="bottom",fontsize=8,color="0.35")
-            ax.text(k,-.015,f"{low:g}",ha="center",va="top",fontsize=8,color="0.35")
-        if not len(chosen):
-            ax.text(.5,.5,"Unavailable: no paired valid Soft results",ha="center",va="center",transform=ax.transAxes)
-            continue
-        z=resp[:,col]
-        clim=max(np.max(np.abs(z)),1e-12) if col==2 else 1
-        last=(z/clim+1)/2 if col==2 else np.clip(z,0,1)
-        cmap=plt.get_cmap("coolwarm" if col==2 else "viridis")
-        from matplotlib.colors import Normalize
-        norm=Normalize(vmin=-clim if col==2 else 0,vmax=clim if col==2 else 1)
-        for row,val in zip(np.column_stack([scaled,last]),z):
-            ax.plot(range(d+1),row,color=cmap(norm(val)),lw=.9,alpha=.30)
-        from matplotlib.cm import ScalarMappable
-        fig.colorbar(ScalarMappable(norm=norm,cmap=cmap),ax=ax,shrink=.65,
-                     label=r"$\Delta H$" if col==2 else r"$H$")
-    fig.suptitle(fr"Parallel coordinates: {len(chosen)} representative samples (axes normalized)")
-    save_fig(fig, folder, "parallel_coordinates")
+                cmap, vmin = "viridis", 0
+                vmax = (common_std if k < 2 else
+                        max(float(np.nanmax(std[2])), 1e-12))
+
+            im = ax.pcolormesh(
+                np.linspace(0, 100, bins + 1),
+                np.arange(len(names) + 1),
+                np.ma.masked_invalid(data[k]),
+                cmap=cmap, vmin=vmin, vmax=vmax,
+                shading="flat"
+            )
+
+            ax.set_ylim(len(names), 0)
+            ax.set_xlim(0, 100)
+            ax.set_yticks(np.arange(len(names)) + 0.5, labels)
+            ax.set_xticks([0, 25, 50, 75, 100],
+                          ["0%", "25%", "50%", "75%", "100%"])
+            ax.set_xlabel("Position within parameter range")
+            ax.set_title(titles[k])
+            ax.tick_params(axis="y", labelsize=9)
+            ax.grid(False)
+
+            fig.colorbar(im, ax=ax, shrink=.8,
+                         label=kind + (" of error" if k == 2 else " of H"))
+
+        fig.suptitle(
+            fr"Binned conditional {kind.lower()}, $t={T_STAR:g}$"
+        )
+        save_fig(fig, folder, filename)
+
+    print(f"热力图完成：使用 {len(X)} 个有效配对设计点", flush=True)
 
 
 def run_multi(hard, soft, hard_path, soft_path, names, full_memo, settings, out):
@@ -349,7 +416,8 @@ def run_multi(hard, soft, hard_path, soft_path, names, full_memo, settings, out)
             index_rows.append({"index":"S2","parameter_1":name,"parameter_2":names[j],
                                "hard":hv,"soft":sv,"soft_minus_hard":sv-hv})
     write_csv(folder/"sobol_indices.csv",index_rows)
-    plot_multi_sobol(names,hsi,ssi,folder)
+    errors = sobol_bootstrap_errorbars(y)
+    plot_multi_sobol(names, hsi, ssi, folder, errors)
     plot_multi_parallel(names,design.reshape(-1,d),y.reshape(-1,2),folder)
     (folder/"sampling_settings.json").write_text(json.dumps({
         "base_sample_size":m,"design_evaluations":total,"seed":MULTI_SEED,
