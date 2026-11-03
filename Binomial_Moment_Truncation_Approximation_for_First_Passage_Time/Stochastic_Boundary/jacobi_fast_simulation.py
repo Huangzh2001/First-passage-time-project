@@ -1,9 +1,3 @@
-"""单文件：fast 组随机边界仿真、二项矩计算及论文绘图。
-直接运行：python jacobi_fast_simulation.py
-快速检查：python jacobi_fast_simulation.py --quick（仅检查流程，不能用于论文）
-依赖：numpy、scipy、matplotlib。无需数据文件或其他 Python 文件。
-硬边界基准含 Jacobi 时间离散及桥跨越近似，并非精确 SSA。
-"""
 from __future__ import annotations
 import os
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -117,121 +111,371 @@ def scaled_matrix(p,gamma,M,K,nq=None):
     return J.tocsc(),d,dict(quadrature=nq,gram_error=float(np.max(np.abs(phi.T@(w[:,None]*phi)-np.eye(K)))),
                            Q_min_eigenvalue=float(np.linalg.eigvalsh(Q)[0]))
 
-def spectral_solve(p,s,g,M,K,step,nq=None):
-    J,d,meta=scaled_matrix(p,g,M,K,nq)
-    obs=observation_times(p,s);h,stride=aligned_step(obs,step)
-    alpha=1-1/np.sqrt(2);tau=2-np.sqrt(2)
-    A=1/(tau*(2-tau));B=(1-tau)**2/(tau*(2-tau))
-    lhs=diags(d)-alpha*h*J;lu=splu(lhs.tocsc())
-    z=initial_vector(p,M,K);H=[float(z.reshape(2,M+1,K)[:,:,0].sum())]
-    residual=0.;maximum=float(np.max(np.abs(z)))
-    for ti in range(1,len(obs)):
-        for j in range(stride):
-            stage=lu.solve(d*z+alpha*h*(J@z));rhs=d*(A*stage-B*z);z=lu.solve(rhs)
-            if j==0 and ti in [1,len(obs)-1]:
-                residual=max(residual,float(np.linalg.norm(lhs@z-rhs,np.inf)/(np.linalg.norm(rhs,np.inf)+1e-300)))
-        H.append(float(z.reshape(2,M+1,K)[:,:,0].sum()));maximum=max(maximum,float(np.max(np.abs(z))))
-        if not np.all(np.isfinite(z)): raise FloatingPointError("系数出现NaN/inf；不丢弃、不替换该结果")
-    meta.update(dt=h,linear_relative_residual=residual,max_abs_coefficient=maximum)
-    return dict(t=obs,H=np.asarray(H),meta=np.array(json.dumps(meta)))
+# def spectral_solve(p,s,g,M,K,step,nq=None):
+#     J,d,meta=scaled_matrix(p,g,M,K,nq)
+#     obs=observation_times(p,s);h,stride=aligned_step(obs,step)
+#     alpha=1-1/np.sqrt(2);tau=2-np.sqrt(2)
+#     A=1/(tau*(2-tau));B=(1-tau)**2/(tau*(2-tau))
+#     lhs=diags(d)-alpha*h*J;lu=splu(lhs.tocsc())
+#     z=initial_vector(p,M,K);H=[float(z.reshape(2,M+1,K)[:,:,0].sum())]
+#     residual=0.;maximum=float(np.max(np.abs(z)))
+#     for ti in range(1,len(obs)):
+#         for j in range(stride):
+#             stage=lu.solve(d*z+alpha*h*(J@z));rhs=d*(A*stage-B*z);z=lu.solve(rhs)
+#             if j==0 and ti in [1,len(obs)-1]:
+#                 residual=max(residual,float(np.linalg.norm(lhs@z-rhs,np.inf)/(np.linalg.norm(rhs,np.inf)+1e-300)))
+#         H.append(float(z.reshape(2,M+1,K)[:,:,0].sum()));maximum=max(maximum,float(np.max(np.abs(z))))
+#         if not np.all(np.isfinite(z)): raise FloatingPointError("系数出现NaN/inf；不丢弃、不替换该结果")
+#     meta.update(dt=h,linear_relative_residual=residual,max_abs_coefficient=maximum)
+#     return dict(t=obs,H=np.asarray(H),meta=np.array(json.dumps(meta)))
 
-def jacobi_step(p,y,h,rng):
-    if np.isclose(p.a,1.,rtol=1e-12,atol=1e-12) and np.isclose(p.b,1.,rtol=1e-12,atol=1e-12):
-        z=2*y-1;g1=rng.standard_normal(len(y));g2=rng.standard_normal(len(y))
-        r=p.sigma*np.sqrt(h)*np.sqrt(g1*g1+g2*g2)
-        znew=z*np.cos(r)+np.sqrt(np.maximum(0,1-z*z))*p.sigma*np.sqrt(h)*g1*np.sinc(r/np.pi)
-        return (np.clip(znew,-1,1)+1)/2
-    # General a,b>0: bounded weak generator-consistent drift/diffusion splitting.
-    # Pure diffusion has mean y and variance y(1-y)*(1-exp(-sigma^2 h)).
-    # A Beta draw matches those two moments. This is NOT exact transition sampling.
-    half=np.exp(-p.kappa*h/2)
-    q=p.theta+(y-p.theta)*half
-    concentration=1/np.expm1(p.sigma**2*h)
-    aa=q*concentration;bb=(1-q)*concentration
-    if np.any(aa<=0) or np.any(bb<=0): raise FloatingPointError("Jacobi split Beta形状参数落入浮点端点；需调整时间步/精度")
-    q=rng.beta(aa,bb)
-    return p.theta+(q-p.theta)*half
+from scipy.integrate import solve_ivp
+
+def spectral_solve(p, s, g, M, K, step, nq=None):
+    # 取得你的方程：D z' = J z
+    J, d, meta = scaled_matrix(p, g, M, K, nq)
+
+    # 取得已知初值
+    z0 = initial_vector(p, M, K)
+
+    # 需要输出结果的时刻
+    obs = observation_times(p, s)
+
+    # 直接定义微分方程的导数
+    def derivative(t, z):
+        return (J @ z) / d
+
+    # 导数对 z 的系数矩阵，提供给求解器以提高效率
+    jacobian = (diags(1.0 / d) @ J).tocsc()
+
+    # 将微分方程、初值和时间区间交给现成求解器
+    result = solve_ivp(
+        fun=derivative,
+        t_span=(float(obs[0]), float(obs[-1])),
+        y0=z0,
+        t_eval=obs,
+        method="BDF",
+        jac=jacobian,
+        max_step=step,
+        rtol=1e-7,
+        atol=1e-10,
+    )
+
+    if not result.success:
+        raise RuntimeError("微分方程求解失败：" + result.message)
+
+    if not np.all(np.isfinite(result.y)):
+        raise FloatingPointError("求解结果出现 NaN/inf")
+
+    # 每个时刻提取生存概率
+    coefficients = result.y.reshape(
+        2, M + 1, K, len(result.t)
+    )
+    H = coefficients[:, :, 0, :].sum(axis=(0, 1))
+
+    meta.update(
+        solver="BDF",
+        max_step=step,
+        rtol=1e-7,
+        atol=1e-10,
+        max_abs_coefficient=float(np.max(np.abs(result.y))),
+    )
+
+    return dict(
+        t=result.t,
+        H=H,
+        meta=np.array(json.dumps(meta)),
+    )
+
+# def jacobi_step(p,y,h,rng):
+#     # if np.isclose(p.a,1.,rtol=1e-12,atol=1e-12) and np.isclose(p.b,1.,rtol=1e-12,atol=1e-12):
+#     #     z=2*y-1;g1=rng.standard_normal(len(y));g2=rng.standard_normal(len(y))
+#     #     r=p.sigma*np.sqrt(h)*np.sqrt(g1*g1+g2*g2)
+#     #     znew=z*np.cos(r)+np.sqrt(np.maximum(0,1-z*z))*p.sigma*np.sqrt(h)*g1*np.sinc(r/np.pi)
+#     #     return (np.clip(znew,-1,1)+1)/2
+#     # General a,b>0: bounded weak generator-consistent drift/diffusion splitting.
+#     # Pure diffusion has mean y and variance y(1-y)*(1-exp(-sigma^2 h)).
+#     # A Beta draw matches those two moments. This is NOT exact transition sampling.
+#     half=np.exp(-p.kappa*h/2)
+#     q=p.theta+(y-p.theta)*half
+#     concentration=1/np.expm1(p.sigma**2*h)
+#     aa=q*concentration;bb=(1-q)*concentration
+#     if np.any(aa<=0) or np.any(bb<=0): raise FloatingPointError("Jacobi split Beta形状参数落入浮点端点；需调整时间步/精度")
+#     q=rng.beta(aa,bb)
+#     return p.theta+(q-p.theta)*half
+
+def jacobi_step(p, y, h, rng):
+    # 布朗运动增量：ΔW ~ N(0, h)
+    dW = np.sqrt(h) * rng.standard_normal(len(y))
+
+    # 漂移增量：κ(θ-y)h
+    drift = p.kappa * (p.theta - y) * h
+
+    # 随机扩散增量：σ√[y(1-y)]ΔW
+    diffusion = (
+        p.sigma
+        * np.sqrt(np.maximum(y * (1 - y), 0.0))
+        * dW
+    )
+
+    # 两种增量直接加到当前位置
+    y_new = y + drift + diffusion
+
+    # 防止离散计算使边界位置跑出 [0,1]
+    return np.clip(y_new, 0.0, 1.0)
 
 def safe_wait(rate,rng):
     wait=np.full(len(rate),np.inf);positive=rate>0
     wait[positive]=rng.exponential(1/rate[positive]);return wait
 
-def mc_chunk(p,s,paths,desired_dt,seed_words):
-    rng=np.random.default_rng(np.random.SeedSequence(seed_words))
-    obs=observation_times(p,s);h,stride=aligned_step(obs,desired_dt);G=np.asarray(s["gammas"])
-    if p.initial_kind=="stationary": y=rng.beta(p.a,p.b,paths)
-    else: y=(rng.uniform(p.initial_lo,p.initial_hi,paths)-p.beta_minus)/(p.beta_plus-p.beta_minus)
-    initial_y=y.copy();N=np.full(paths,p.N0,dtype=np.int64);S=(rng.random(paths)<p.p_on0).astype(np.int8)
-    event=safe_wait(np.where(S==1,p.k1,p.k2)+p.mu*S+p.delta*N,rng)
-    hazard=np.zeros((len(G),paths));hard=np.ones(paths)
-    hit=np.full(paths,np.inf);hit_endpoint=np.full(paths,np.inf)
-    sums_soft=[];squares_soft=[];sums_hard=[];squares_hard=[];sums_bias=[];squares_bias=[]
-    counts_hit=[];counts_endpoint=[];sample_y=[y[:32].copy()];sample_N=[N[:32].copy()]
-    events=0;allids=np.arange(paths)
-    def segment(ids,t0,t1,b0,b1,n):
-        duration=t1-t0
-        if len(ids)==0:return
-        middle=(b0+b1)/2
-        for gi,g in enumerate(G):
-            r=.5*g*(b1-b0);factor=np.ones(len(ids));mask=np.abs(r)>1e-6
-            factor[mask]=np.sinh(r[mask])/r[mask]
-            with np.errstate(divide="ignore",over="ignore"):
-                log_added=np.log(g)+np.log(duration)+g*(n-middle)+np.log(factor)
-                added=np.exp(np.minimum(np.log(1e6),log_added))
-            hazard[gi,ids]=np.minimum(1e6,hazard[gi,ids]+added)
-        end_hit=(n>=b0)|(n>=b1)
-        new=end_hit & ~np.isfinite(hit_endpoint[ids]);hit_endpoint[ids[new]]=np.where(n[new]>=b0[new],t0[new],t1[new])
-        prob=np.zeros(len(ids));prob[end_hit]=1
-        variance=p.sigma**2*(n-p.beta_minus)*(p.beta_plus-n)
-        eligible=~end_hit & (variance>0)&(duration>0)
-        prob[eligible]=np.exp(-2*(b0[eligible]-n[eligible])*(b1[eligible]-n[eligible])/(variance[eligible]*duration[eligible]))
-        hard[ids]*=(1-prob)
-        candidates=np.flatnonzero(~np.isfinite(hit[ids]))
-        if len(candidates):
-            select=candidates[rng.random(len(candidates))<prob[candidates]]
-            hit[ids[select]]=(t0[select]+t1[select])/2
-    def record(t):
-        soft=np.exp(-hazard);bias=soft-hard
-        sums_soft.append(soft.sum(axis=1));squares_soft.append((soft*soft).sum(axis=1))
-        sums_hard.append(hard.sum());squares_hard.append(np.dot(hard,hard))
-        sums_bias.append(bias.sum(axis=1));squares_bias.append((bias*bias).sum(axis=1))
-        counts_hit.append(np.sum(hit>t));counts_endpoint.append(np.sum(hit_endpoint>t))
-    record(0.)
-    for step in range((len(obs)-1)*stride):
-        t0=step*h;t1=(step+1)*h;ynew=jacobi_step(p,y,h,rng)
-        bstart=p.beta_minus+(p.beta_plus-p.beta_minus)*y;bend=p.beta_minus+(p.beta_plus-p.beta_minus)*ynew
-        local=np.full(paths,t0)
+
+
+# def mc_chunk(p, s, paths, desired_dt, seed_words):
+#     rng = np.random.default_rng(np.random.SeedSequence(seed_words))
+#     obs = observation_times(p, s)
+#     h, stride = aligned_step(obs, desired_dt)
+#     width = p.beta_plus - p.beta_minus
+
+#     # 初始边界、分子数、启动子状态
+#     if p.initial_kind == "stationary":
+#         y = rng.beta(p.a, p.b, paths)
+#     else:
+#         y = (
+#             rng.uniform(p.initial_lo, p.initial_hi, paths)
+#             - p.beta_minus
+#         ) / width
+
+#     N = np.full(paths, p.N0, dtype=np.int64)
+#     S = (rng.random(paths) < p.p_on0).astype(np.int8)
+
+#     def total_rate():
+#         return (
+#             np.where(S == 1, p.k1, p.k2)
+#             + p.mu * S
+#             + p.delta * N
+#         )
+
+#     event = safe_wait(total_rate(), rng)
+
+#     # 只记录 hard 生存权重和首次命中时间
+#     hard = np.ones(paths)
+#     hit = np.full(paths, np.inf)
+
+#     initial_hit = N >= p.beta_minus + width * y
+#     hard[initial_hit] = 0
+#     hit[initial_hit] = 0
+
+#     hard_sums = [float(hard.sum())]
+#     allids = np.arange(paths)
+
+#     # 处理分子数不变的子区间，保留原来的桥跨越近似
+#     def segment(ids, start, end, b0, b1, n):
+#         if len(ids) == 0:
+#             return
+
+#         duration = end - start
+#         crossed = (n >= b0) | (n >= b1)
+#         prob = crossed.astype(float)
+
+#         variance = (
+#             p.sigma**2
+#             * (n - p.beta_minus)
+#             * (p.beta_plus - n)
+#         )
+#         eligible = (~crossed) & (variance > 0) & (duration > 0)
+
+#         prob[eligible] = np.exp(
+#             -2 * (b0[eligible] - n[eligible])
+#             * (b1[eligible] - n[eligible])
+#             / (variance[eligible] * duration[eligible])
+#         )
+
+#         hard[ids] *= 1 - prob
+
+#         candidates = np.flatnonzero(~np.isfinite(hit[ids]))
+#         selected = candidates[
+#             rng.random(len(candidates)) < prob[candidates]
+#         ]
+#         hit[ids[selected]] = (start[selected] + end[selected]) / 2
+
+#     # 模拟边界和基因反应
+#     for step in range((len(obs) - 1) * stride):
+#         t0 = step * h
+#         t1 = (step + 1) * h
+
+#         ynew = jacobi_step(p, y, h, rng)
+#         bstart = p.beta_minus + width * y
+#         bend = p.beta_minus + width * ynew
+#         local = np.full(paths, t0)
+
+#         while True:
+#             ids = np.flatnonzero(event < t1)
+#             if len(ids) == 0:
+#                 break
+
+#             e = event[ids]
+
+#             b0 = (
+#                 bstart[ids]
+#                 + (bend[ids] - bstart[ids]) * (local[ids] - t0) / h
+#             )
+#             b1 = (
+#                 bstart[ids]
+#                 + (bend[ids] - bstart[ids]) * (e - t0) / h
+#             )
+#             segment(ids, local[ids], e, b0, b1, N[ids])
+
+#             # SSA：选择并执行反应
+#             switch = np.where(S[ids] == 1, p.k1, p.k2)
+#             birth = p.mu * S[ids]
+#             death = p.delta * N[ids]
+
+#             choice = rng.random(len(ids)) * (switch + birth + death)
+#             sw = choice < switch
+#             bi = (choice >= switch) & (choice < switch + birth)
+#             de = choice >= switch + birth
+
+#             S[ids[sw]] = 1 - S[ids[sw]]
+#             N[ids[bi]] += 1
+#             N[ids[de]] -= 1
+
+#             # 检查反应跳跃是否造成命中
+#             crossing = N[ids] >= b1
+#             new = crossing & ~np.isfinite(hit[ids])
+#             hit[ids[new]] = e[new]
+#             hard[ids[crossing]] = 0
+
+#             local[ids] = e
+#             event[ids] = e + safe_wait(total_rate()[ids], rng)
+
+#         # 处理本步剩余的无反应区间
+#         b0 = bstart + (bend - bstart) * (local - t0) / h
+#         segment(allids, local, np.full(paths, t1), b0, bend, N)
+#         y = ynew
+
+#         if (step + 1) % stride == 0:
+#             hard_sums.append(float(hard.sum()))
+
+#     return dict(
+#         paths=np.array(paths),
+#         t=obs,
+#         dt=np.array(h),
+#         sum_hard=np.asarray(hard_sums),
+#         first_hit=hit,
+#     )
+
+def mc_chunk(p, s, paths, desired_dt, seed_words):
+    rng = np.random.default_rng(np.random.SeedSequence(seed_words))
+
+    obs = observation_times(p, s)
+    h, stride = aligned_step(obs, desired_dt)
+    width = p.beta_plus - p.beta_minus
+
+    # 1. 初始边界
+    if p.initial_kind == "stationary":
+        y = rng.beta(p.a, p.b, paths)
+    else:
+        y = (
+            rng.uniform(p.initial_lo, p.initial_hi, paths)
+            - p.beta_minus
+        ) / width
+
+    # 2. 初始分子数和启动子状态
+    N = np.full(paths, p.N0, dtype=np.int64)
+    S = (rng.random(paths) < p.p_on0).astype(np.int8)
+
+    def total_rate():
+        return (
+            np.where(S == 1, p.k1, p.k2)
+            + p.mu * S
+            + p.delta * N
+        )
+
+    # 3. 首次反应时间、存活标记、首次命中时间
+    event = safe_wait(total_rate(), rng)
+    hard = np.ones(paths, dtype=np.int8)
+    hit = np.full(paths, np.inf)
+
+    # 检查初始时刻是否已经越界
+    crossing = N >= p.beta_minus + width * y
+    hard[crossing] = 0
+    hit[crossing] = 0.0
+
+    hard_sums = [int(hard.sum())]
+
+    # 4. 逐步模拟
+    for step in range((len(obs) - 1) * stride):
+        t0 = step * h
+        t1 = (step + 1) * h
+
+        ynew = jacobi_step(p, y, h, rng)
+        bstart = p.beta_minus + width * y
+        bend = p.beta_minus + width * ynew
+
+        # 处理本时间步内的全部反应
         while True:
-            ids=np.flatnonzero(event<t1)
-            if not len(ids):break
-            e=event[ids]
-            b0=bstart[ids]+(bend[ids]-bstart[ids])*(local[ids]-t0)/h
-            b1=bstart[ids]+(bend[ids]-bstart[ids])*(e-t0)/h
-            segment(ids,local[ids],e,b0,b1,N[ids])
-            switch=np.where(S[ids]==1,p.k1,p.k2);birth=p.mu*S[ids];death=p.delta*N[ids]
-            choice=rng.random(len(ids))*(switch+birth+death)
-            sw=choice<switch;bi=(choice>=switch)&(choice<switch+birth);de=choice>=switch+birth
-            S[ids[sw]]=1-S[ids[sw]];N[ids[bi]]+=1;N[ids[de]]-=1
-            crossing=N[ids]>=b1
-            new=crossing & ~np.isfinite(hit[ids]);hit[ids[new]]=e[new]
-            new=crossing & ~np.isfinite(hit_endpoint[ids]);hit_endpoint[ids[new]]=e[new]
-            hard[ids[crossing]]=0;local[ids]=e
-            event[ids]=e+safe_wait(np.where(S[ids]==1,p.k1,p.k2)+p.mu*S[ids]+p.delta*N[ids],rng)
-            events+=len(ids)
-        b0=bstart+(bend-bstart)*(local-t0)/h
-        segment(allids,local,np.full(paths,t1),b0,bend,N);y=ynew
-        if (step+1)%stride==0:
-            record(obs[(step+1)//stride]);sample_y.append(y[:32].copy());sample_N.append(N[:32].copy())
-    return dict(paths=np.array(paths),t=obs,dt=np.array(h),sum_soft=np.asarray(sums_soft).T,
-                square_soft=np.asarray(squares_soft).T,sum_hard=np.asarray(sums_hard),square_hard=np.asarray(squares_hard),
-                sum_bias=np.asarray(sums_bias).T,square_bias=np.asarray(squares_bias).T,
-                count_hit=np.asarray(counts_hit),count_endpoint=np.asarray(counts_endpoint),
-                first_hit=hit,first_hit_endpoint=hit_endpoint,final_soft=np.exp(-hazard),final_hard=hard,
-                initial_y=initial_y,final_y=y,final_N=N,final_S=S,sample_y=np.asarray(sample_y),sample_N=np.asarray(sample_N),
-                reaction_events=np.array(events),seed_words=np.asarray(seed_words))
+            ids = np.flatnonzero(event < t1)
+            if len(ids) == 0:
+                break
+
+            e = event[ids]
+
+            # 线性插值得到反应时刻的边界
+            beta = (
+                bstart[ids]
+                + (bend[ids] - bstart[ids]) * (e - t0) / h
+            )
+
+            # 检查反应前是否已经越界
+            new = (hard[ids] == 1) & (N[ids] >= beta)
+            hit[ids[new]] = e[new]
+            hard[ids[new]] = 0
+
+            # SSA：计算三种反应的速率
+            switch = np.where(S[ids] == 1, p.k1, p.k2)
+            birth = p.mu * S[ids]
+            death = p.delta * N[ids]
+
+            # 按速率比例选择反应
+            choice = rng.random(len(ids)) * (switch + birth + death)
+            sw = choice < switch
+            bi = (choice >= switch) & (choice < switch + birth)
+            de = choice >= switch + birth
+
+            # 执行反应
+            S[ids[sw]] = 1 - S[ids[sw]]
+            N[ids[bi]] += 1
+            N[ids[de]] -= 1
+
+            # 检查反应后是否越界
+            new = (hard[ids] == 1) & (N[ids] >= beta)
+            hit[ids[new]] = e[new]
+            hard[ids[new]] = 0
+
+            # 采样下一次反应时间
+            event[ids] = e + safe_wait(total_rate()[ids], rng)
+
+        # 检查本时间步终点是否越界
+        new = (hard == 1) & (N >= bend)
+        hit[new] = t1
+        hard[new] = 0
+
+        y = ynew
+
+        # 到达输出时刻，记录仍存活的轨迹数量
+        if (step + 1) % stride == 0:
+            hard_sums.append(int(hard.sum()))
+
+    return dict(
+        paths=np.array(paths),
+        t=obs,
+        dt=np.array(h),
+        sum_hard=np.asarray(hard_sums),
+        first_hit=hit,
+    )
 
 
-def draw_figure(curves, times, hard_H, hits, quick):
+def draw_figure(curves, times, hard_H, hits):
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.6))
     axes[0].plot(times, hard_H, color="0.45", linestyle=":", linewidth=2,
                  label="Hard boundary (MC)")
@@ -267,10 +511,7 @@ def draw_figure(curves, times, hard_H, hits, quick):
         ax.spines["right"].set_visible(False)
     axes[1].legend(loc="upper right")
     fig.tight_layout()
-    name = "jacobi_fast_boundary_quick" if quick else "jacobi_fast_boundary"
-    if quick:
-        fig.suptitle("Quick workflow check", fontsize=9)
-        fig.tight_layout()
+    name = "jacobi_fast_boundary"
     for extension in ["svg", "pdf", "png"]:
         path = HERE / f"{name}.{extension}"
         fig.savefig(path, dpi=900, bbox_inches="tight")
@@ -279,17 +520,10 @@ def draw_figure(curves, times, hard_H, hits, quick):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--quick", action="store_true")
-    args = parser.parse_args()
-    # fast 组，与已有批量实验完全相同的模型参数和初始条件。
     p = Model(beta_minus=2.75, beta_plus=3.25, kappa=1., theta=.5, sigma=1.,
               k1=.5, k2=1.2, mu=5., delta=.8, N0=0, p_on0=1., T=4.,
               initial_kind="stationary", initial_lo=None, initial_hi=None)
     m, k, ode_dt, mc_dt, paths = M, K, ODE_DT, MC_DT, MC_PATHS
-    if args.quick:
-        m, k, ode_dt, mc_dt, paths = 8, 16, .005, .005, 2000
-        print("快速流程检查：低分辨率结果不能用于论文。", flush=True)
     if len(GAMMAS) > len(COLORS):
         raise ValueError("请为每个 gamma 配置一种 COLORS 颜色。")
     s = dict(gammas=GAMMAS, observation_dt=OBSERVATION_DT)
@@ -300,7 +534,7 @@ def main():
         print(f"已完成 gamma={gamma:g}", flush=True)
     times = observation_times(p, s)
     hard_sum = np.zeros(len(times))
-    soft_sum = np.zeros((len(GAMMAS), len(times)))
+    
     hit_chunks = []
     print(f"开始硬边界及软边界MC：{paths}条轨迹，时间步={mc_dt}", flush=True)
     for chunk, start in enumerate(range(0, paths, BATCH_SIZE)):
@@ -308,14 +542,12 @@ def main():
         # 与原批量程序 fine 阶段相同的随机种子规则。
         result = mc_chunk(p, s, count, mc_dt, [SEED, 1, chunk])
         hard_sum += result["sum_hard"]
-        soft_sum += result["sum_soft"]
+        
         hit_chunks.append(result["first_hit"])
         print(f"MC进度：{start+count}/{paths}", flush=True)
     hard_H = hard_sum / paths
-    for gi, gamma in enumerate(GAMMAS):
-        difference = np.max(np.abs(curves[gamma]["H"]-soft_sum[gi]/paths))
-        print(f"gamma={gamma:g}: 与软MC最大差={difference:.6g}", flush=True)
-    draw_figure(curves, times, hard_H, np.concatenate(hit_chunks), args.quick)
+
+    draw_figure(curves, times, hard_H, np.concatenate(hit_chunks))
 
 
 if __name__ == "__main__":
