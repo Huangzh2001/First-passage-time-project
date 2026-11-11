@@ -1,13 +1,8 @@
-"""批跑使用的边界函数与对应的解析首达区间。"""
+"""批跑使用的首达判据 g，首达时间由 FirstEvent 根据 g 求解。"""
 
 import numpy as np
 
-import ssa
 from ssa import FirstEvent, affine_time_boundary, exponential_boundary
-
-
-def interval_first_hit(windows):
-    return ssa.interval_first_hit(windows)
 
 
 NEW_BOUNDARIES = (
@@ -30,7 +25,7 @@ def window_boundary(family, variant):
     if not 0 <= family < len(WINDOW_BOUNDARIES):
         raise ValueError("Unknown window family")
 
-    def windows(m,n):
+    def intervals(m,n):
         m=np.asarray(m,dtype=float); n=np.asarray(n,dtype=float)
         shift=.12*variant
         active=m*n >= 3.5+variant
@@ -71,7 +66,12 @@ def window_boundary(family, variant):
         return [(np.where(active,lo,np.inf),np.where(active,hi,-np.inf))
                 for lo,hi in bands]
 
-    return FirstEvent.from_windows(windows)
+    def g(t, m, n):
+        scores = [np.minimum(t-lo, hi-t) for lo, hi in intervals(m, n)]
+        value = np.maximum.reduce(scores)
+        return np.where(np.isfinite(value), value, -1.)
+
+    return FirstEvent(g)
 
 
 def smooth_presets():
@@ -103,9 +103,6 @@ def comparison_boundary(name):
             else:
                 score = np.minimum(m+n-4, 1-np.abs(m-n))
             return np.maximum(score, high) / 4
-        def windows(m, n):
-            hit = g(0., m, n) >= 0
-            return [(np.where(hit, 0., np.inf), np.where(hit, np.inf, -np.inf))]
     elif name in ("delayed_ramp", "step_release"):
         ramp = name == "delayed_ramp"
 
@@ -116,12 +113,6 @@ def comparison_boundary(name):
             if ramp:
                 return np.clip((t-ramp_opening(score))/2, (score-80)/40, (score-40)/40)
             return (score - np.where(t < 2.5, 80, 48)) / 40
-        def windows(m, n):
-            score = 11*m + 9*n
-            eligible = score >= (40 if ramp else 48)
-            opening = ramp_opening(score) if ramp else 2.5
-            start = np.where(score >= 80, 0., opening)
-            return [(np.where(eligible, start, np.inf), np.inf)]
     elif name in ("guarded_pulse", "guarded_double_pulse"):
         centers = (3.,) if name == "guarded_pulse" else (2., 5.)
 
@@ -135,18 +126,10 @@ def comparison_boundary(name):
                 start, end = pulse(score, center)
                 value = np.maximum(value, (29.5/60)*np.minimum(t-start, end-t))
             return value
-        def windows(m, n):
-            score = 9*m + 11*n
-            bands = [(np.where(score >= 80, 0., np.inf), np.inf)]
-            temporary = (score > 50.5) & (score < 80)
-            for center in centers:
-                lo, hi = pulse(score, center)
-                bands.append((np.where(temporary, lo, np.inf), np.where(temporary, hi, -np.inf)))
-            return bands
     else:
         raise ValueError(f"Unknown comparison boundary: {name}")
 
-    return FirstEvent(g, interval_first_hit(windows))
+    return FirstEvent(g)
 
 
 def coupled_boundary(name):
