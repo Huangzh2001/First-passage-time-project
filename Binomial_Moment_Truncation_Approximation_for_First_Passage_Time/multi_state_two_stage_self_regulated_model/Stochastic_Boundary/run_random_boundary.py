@@ -9,10 +9,20 @@ from random_boundary import RandomBoundary
 from random_solvers import sample_hits, solve_moments
 
 MODEL = 0
+
+
+# def hit_rule(m, n, x):
+#     # 在这里改首达判据。比如 return m + n - (1 + x**2)。
+#     return n - x
+
+def hit_rule(m, n, x):
+    return m + n + 0.25 * m * x - x
+
+
 BOUNDARIES = (
-    RandomBoundary("jacobi", sigma=.7, kappa=1., theta=.25),
-    RandomBoundary("ou", sigma=.65, kappa=1.5, theta=.75),
-    RandomBoundary("brownian", sigma=1.),
+    RandomBoundary("jacobi", sigma=.7, kappa=1., theta=.25, criterion=hit_rule),
+    RandomBoundary("ou", sigma=.65, kappa=1.5, theta=.75, criterion=hit_rule),
+    RandomBoundary("brownian", sigma=1., criterion=hit_rule),
 )
 PATHS = 2000
 DT_VALUES = (.02, .01)

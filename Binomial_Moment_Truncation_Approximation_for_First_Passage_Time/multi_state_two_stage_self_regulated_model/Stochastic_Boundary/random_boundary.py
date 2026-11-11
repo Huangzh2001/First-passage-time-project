@@ -1,10 +1,15 @@
-"""三个独立随机阈值：Jacobi、双端反射 OU、双端反射布朗。"""
+"""Jacobi、双端反射 OU 和双端反射布朗，以及可配置的首达判据。"""
 from dataclasses import dataclass
+from typing import Callable
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 from scipy.linalg import eigh
 from scipy.special import eval_jacobi, roots_jacobi
 from scipy.stats import truncnorm
+
+
+def protein_threshold(m, n, x):
+    return n - x
 
 
 @dataclass(frozen=True)
@@ -15,6 +20,7 @@ class RandomBoundary:
     sigma: float = 1.
     kappa: float = 1.
     theta: float = .5  # Jacobi 用区间比例；OU 用区间位置的比例
+    criterion: Callable = protein_threshold
 
     def __post_init__(self):
         if (self.kind not in ('brownian', 'jacobi', 'ou') or self.lower >= self.upper
@@ -22,7 +28,8 @@ class RandomBoundary:
             raise ValueError('Invalid boundary parameters')
 
     def g(self, m, n, x):
-        return n - x
+        """计算 g >= 0 的判据，支持 NumPy 数组和广播。"""
+        return np.broadcast_to(self.criterion(m, n, x), np.broadcast(m, n, x).shape)
 
     def initial(self, rng, paths):
         if self.kind == 'brownian':
