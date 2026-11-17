@@ -86,223 +86,223 @@ def soft_rate(t, m, n, gamma, boundary):
 
 
 
-# def solve_with_survival(operator, L, K, boundary, times, gamma, *,
-#                         scale=1.15, basis="exp", rtol=2e-9, atol=1e-12,
-#                         max_step=.035, timeout=180.):
-#     """Integrate the original signed moment equations together with H'."""
-#     # 1. 第 1 步：读取前面构造好的结果
-#     Q, m, n, initial = operator
-
-#     # 2. 第 2 步：引入 weights 缩放
-#     weights = scale ** (m + n)
-#     if basis == "binomial":
-#         weights /= np.array([comb(L + 1, j) for j in range(L + 1)], float)[m]
-#         weights /= np.array([comb(K + 1, j) for j in range(K + 1)], float)[n]
-#     if not np.isfinite(weights).all() or np.any(weights <= 0):
-#         raise ValueError("Scaling overflow/underflow; adjust --scale or moment orders.")
-#     entries = Q.tocoo()
-#     entries.data *= weights[entries.row] / weights[entries.col]
-#     A = entries.tocsc()
-
-#     # 3. 第 3 步：定义软杀死率
-#     def killing(t):
-#         return soft_rate(t, m, n, gamma, boundary)
-
-#     # 4. 第 4 步：定义真正要求解的微分方程 rhs
-#     def rhs(t, state):
-#         rates = killing(t)
-#         z = state[:-1]
-#         return np.r_[A @ z - rates * z, -fsum(rates * (z / weights))]
-
-#     # 5. 第 5 步：定义 Jacobian
-#     def jac(t, _state):
-#         rates = killing(t)
-#         return bmat([[A - diags(rates), None],
-#                      [csc_matrix((-rates / weights)[None, :]), csc_matrix((1, 1))]],
-#                     format="csc")
-
-#     # 6. 第 6 步：设置初始条件
-#     h, density, h_sum = np.full((3, len(times)), np.nan)
-#     h[0] = h_sum[0] = fsum(initial)
-#     cursor, last = 1, 0.
-#     status, message = "finished", ""
-#     started = perf_counter()
-#     try:
-#         density[0] = fsum(killing(0.) * initial)
-#         component_atol = atol * weights if basis == "binomial" else np.full(len(weights), atol)
-
-#         # 7. 第 7 步：使用 BDF 求解器
-#         solver = BDF(rhs, 0., np.r_[weights * initial, h[0]], times[-1], jac=jac,
-#                      rtol=rtol, atol=np.r_[component_atol, rtol * 1e-3], max_step=max_step)
-
-#         def factor(B):
-#             # The last variable is H. Its row does not affect the original block.
-#             solver.nlu += 1
-#             return (splu(B[:-1, :-1].tocsc(), permc_spec="MMD_AT_PLUS_A"),
-#                     B[-1, :-1].toarray().ravel(), B[-1, -1])
-
-#         def solve_factor(factorization, b):
-#             lu, row, diagonal = factorization
-#             z = lu.solve(b[:-1])
-#             return np.r_[z, (b[-1] - fsum(row * z)) / diagonal]
-
-#         solver.lu, solver.solve_lu = factor, solve_factor
-#         while solver.status == "running":
-#             message = solver.step() or ""
-#             last = float(solver.t)
-#             if solver.status == "failed":
-#                 status = "solver_failed"
-#                 break
-#             stop = np.searchsorted(times, solver.t, side="right")
-#             if stop > cursor:
-#                 section = slice(cursor, stop)
-#                 sample = solver.dense_output()(times[section])
-#                 h[section] = sample[-1]
-#                 for j in range(cursor, stop):
-#                     values = sample[:-1, j-cursor] / weights
-#                     h_sum[j] = fsum(values)
-#                     density[j] = fsum(killing(times[j]) * values)
-#                 # Earlier samples have already passed these checks.
-#                 if not np.isfinite(h[section]).all() or not np.isfinite(density[section]).all():
-#                     status = "nonfinite"
-#                     break
-#                 if np.max(np.abs(h[section])) >= 1e4:
-#                     status = "diverged"
-#                     break
-#                 cursor = stop
-#             if solver.status == "running" and perf_counter() - started >= timeout:
-#                 status = "timeout"
-#                 break
-#     except (ValueError, FloatingPointError, OverflowError, RuntimeError) as exc:
-#         status, message = "solver_failed", str(exc)
-
-#     first_anomaly, first_by_check, finite_samples = curve_diagnostics(times, h, density)
-#     return dict(h=h, density=density, h_from_sum=h_sum, status=status, message=message,
-#                 last_time=last, first_anomaly=first_anomaly, first_by_check=first_by_check,
-#                 finite_samples=finite_samples, seconds=perf_counter() - started)
-
-
-
 def solve_with_survival(operator, L, K, boundary, times, gamma, *,
                         scale=1.15, basis="exp", rtol=2e-9, atol=1e-12,
                         max_step=.035, timeout=180.):
-    """直接积分未缩放的二项反演方程及生存概率 H(t)。
-
-    保留 scale 和 basis 参数以兼容旧调用；
-    此简化版不再使用它们。
-    """
-
-    # 1. 读取反应矩阵、坐标和初始条件
+    """Integrate the original signed moment equations together with H'."""
+    # 1. 第 1 步：读取前面构造好的结果
     Q, m, n, initial = operator
 
-    # 2. 计算每个坐标对应的软杀死率 V_gamma
+    # 2. 第 2 步：引入 weights 缩放
+    weights = scale ** (m + n)
+    if basis == "binomial":
+        weights /= np.array([comb(L + 1, j) for j in range(L + 1)], float)[m]
+        weights /= np.array([comb(K + 1, j) for j in range(K + 1)], float)[n]
+    if not np.isfinite(weights).all() or np.any(weights <= 0):
+        raise ValueError("Scaling overflow/underflow; adjust --scale or moment orders.")
+    entries = Q.tocoo()
+    entries.data *= weights[entries.row] / weights[entries.col]
+    A = entries.tocsc()
+
+    # 3. 第 3 步：定义软杀死率
     def killing(t):
         return soft_rate(t, m, n, gamma, boundary)
 
-    # 3. 按理论公式直接定义微分方程
+    # 4. 第 4 步：定义真正要求解的微分方程 rhs
     def rhs(t, state):
-        x = state[:-1]       # 二项反演坐标向量
-        v = killing(t)       # 各坐标的软杀死率
+        rates = killing(t)
+        z = state[:-1]
+        return np.r_[A @ z - rates * z, -fsum(rates * (z / weights))]
 
-        # dx/dt = Qx - V_gamma*x
-        dx = Q @ x - v * x
+    # 5. 第 5 步：定义 Jacobian
+    def jac(t, _state):
+        rates = killing(t)
+        return bmat([[A - diags(rates), None],
+                     [csc_matrix((-rates / weights)[None, :]), csc_matrix((1, 1))]],
+                    format="csc")
 
-        # H'(t) = -sum(V_gamma*x)
-        dH = -fsum(v * x)
-
-        return np.r_[dx, dH]
-
-    # 4. 初始化需要输出的结果
+    # 6. 第 6 步：设置初始条件
     h, density, h_sum = np.full((3, len(times)), np.nan)
-    # 生存概率的初始值：由理论定义直接得到
-    h[0] = 1.0
-
-    # 二项反演坐标初始值的总和：单独计算
-    h_sum[0] = fsum(initial)
-
+    h[0] = h_sum[0] = fsum(initial)
     cursor, last = 1, 0.
     status, message = "finished", ""
     started = perf_counter()
-
     try:
         density[0] = fsum(killing(0.) * initial)
+        component_atol = atol * weights if basis == "binomial" else np.full(len(weights), atol)
 
-        # 5. 直接交给 BDF 求解，不再手动设置 Jacobian 和 LU
-        solver = BDF(
-            rhs,
-            0.,
-            np.r_[initial, h[0]],
-            times[-1],
-            rtol=rtol,
-            atol=atol,
-            max_step=max_step
-        )
+        # 7. 第 7 步：使用 BDF 求解器
+        solver = BDF(rhs, 0., np.r_[weights * initial, h[0]], times[-1], jac=jac,
+                     rtol=rtol, atol=np.r_[component_atol, rtol * 1e-3], max_step=max_step)
 
-        # 6. 逐步进行时间积分
+        def factor(B):
+            # The last variable is H. Its row does not affect the original block.
+            solver.nlu += 1
+            return (splu(B[:-1, :-1].tocsc(), permc_spec="MMD_AT_PLUS_A"),
+                    B[-1, :-1].toarray().ravel(), B[-1, -1])
+
+        def solve_factor(factorization, b):
+            lu, row, diagonal = factorization
+            z = lu.solve(b[:-1])
+            return np.r_[z, (b[-1] - fsum(row * z)) / diagonal]
+
+        solver.lu, solver.solve_lu = factor, solve_factor
         while solver.status == "running":
             message = solver.step() or ""
             last = float(solver.t)
-
             if solver.status == "failed":
                 status = "solver_failed"
                 break
-
-            # 7. 提取指定时间点的计算结果
             stop = np.searchsorted(times, solver.t, side="right")
-
             if stop > cursor:
                 section = slice(cursor, stop)
                 sample = solver.dense_output()(times[section])
-
-                # 直接积分得到的生存概率
                 h[section] = sample[-1]
-
                 for j in range(cursor, stop):
-                    x = sample[:-1, j - cursor]
-
-                    # 通过全部二项反演坐标求和得到 H(t)
-                    h_sum[j] = fsum(x)
-
-                    # 首达时间概率密度
-                    density[j] = fsum(killing(times[j]) * x)
-
-                # 8. 检查计算是否异常
-                if (not np.isfinite(h[section]).all()
-                        or not np.isfinite(density[section]).all()):
+                    values = sample[:-1, j-cursor] / weights
+                    h_sum[j] = fsum(values)
+                    density[j] = fsum(killing(times[j]) * values)
+                # Earlier samples have already passed these checks.
+                if not np.isfinite(h[section]).all() or not np.isfinite(density[section]).all():
                     status = "nonfinite"
                     break
-
                 if np.max(np.abs(h[section])) >= 1e4:
                     status = "diverged"
                     break
-
                 cursor = stop
-
-            if (solver.status == "running"
-                    and perf_counter() - started >= timeout):
+            if solver.status == "running" and perf_counter() - started >= timeout:
                 status = "timeout"
                 break
-
     except (ValueError, FloatingPointError, OverflowError, RuntimeError) as exc:
         status, message = "solver_failed", str(exc)
 
-    # 9. 进行原有的诊断并保持返回格式不变
-    first_anomaly, first_by_check, finite_samples = curve_diagnostics(
-        times, h, density
-    )
+    first_anomaly, first_by_check, finite_samples = curve_diagnostics(times, h, density)
+    return dict(h=h, density=density, h_from_sum=h_sum, status=status, message=message,
+                last_time=last, first_anomaly=first_anomaly, first_by_check=first_by_check,
+                finite_samples=finite_samples, seconds=perf_counter() - started)
 
-    return dict(
-        h=h,
-        density=density,
-        h_from_sum=h_sum,
-        status=status,
-        message=message,
-        last_time=last,
-        first_anomaly=first_anomaly,
-        first_by_check=first_by_check,
-        finite_samples=finite_samples,
-        seconds=perf_counter() - started
-    )
+
+
+# def solve_with_survival(operator, L, K, boundary, times, gamma, *,
+#                         scale=1.15, basis="exp", rtol=2e-9, atol=1e-12,
+#                         max_step=.035, timeout=180.):
+#     """直接积分未缩放的二项反演方程及生存概率 H(t)。
+
+#     保留 scale 和 basis 参数以兼容旧调用；
+#     此简化版不再使用它们。
+#     """
+
+#     # 1. 读取反应矩阵、坐标和初始条件
+#     Q, m, n, initial = operator
+
+#     # 2. 计算每个坐标对应的软杀死率 V_gamma
+#     def killing(t):
+#         return soft_rate(t, m, n, gamma, boundary)
+
+#     # 3. 按理论公式直接定义微分方程
+#     def rhs(t, state):
+#         x = state[:-1]       # 二项反演坐标向量
+#         v = killing(t)       # 各坐标的软杀死率
+
+#         # dx/dt = Qx - V_gamma*x
+#         dx = Q @ x - v * x
+
+#         # H'(t) = -sum(V_gamma*x)
+#         dH = -fsum(v * x)
+
+#         return np.r_[dx, dH]
+
+#     # 4. 初始化需要输出的结果
+#     h, density, h_sum = np.full((3, len(times)), np.nan)
+#     # 生存概率的初始值：由理论定义直接得到
+#     h[0] = 1.0
+
+#     # 二项反演坐标初始值的总和：单独计算
+#     h_sum[0] = fsum(initial)
+
+#     cursor, last = 1, 0.
+#     status, message = "finished", ""
+#     started = perf_counter()
+
+#     try:
+#         density[0] = fsum(killing(0.) * initial)
+
+#         # 5. 直接交给 BDF 求解，不再手动设置 Jacobian 和 LU
+#         solver = BDF(
+#             rhs,
+#             0.,
+#             np.r_[initial, h[0]],
+#             times[-1],
+#             rtol=rtol,
+#             atol=atol,
+#             max_step=max_step
+#         )
+
+#         # 6. 逐步进行时间积分
+#         while solver.status == "running":
+#             message = solver.step() or ""
+#             last = float(solver.t)
+
+#             if solver.status == "failed":
+#                 status = "solver_failed"
+#                 break
+
+#             # 7. 提取指定时间点的计算结果
+#             stop = np.searchsorted(times, solver.t, side="right")
+
+#             if stop > cursor:
+#                 section = slice(cursor, stop)
+#                 sample = solver.dense_output()(times[section])
+
+#                 # 直接积分得到的生存概率
+#                 h[section] = sample[-1]
+
+#                 for j in range(cursor, stop):
+#                     x = sample[:-1, j - cursor]
+
+#                     # 通过全部二项反演坐标求和得到 H(t)
+#                     h_sum[j] = fsum(x)
+
+#                     # 首达时间概率密度
+#                     density[j] = fsum(killing(times[j]) * x)
+
+#                 # 8. 检查计算是否异常
+#                 if (not np.isfinite(h[section]).all()
+#                         or not np.isfinite(density[section]).all()):
+#                     status = "nonfinite"
+#                     break
+
+#                 if np.max(np.abs(h[section])) >= 1e4:
+#                     status = "diverged"
+#                     break
+
+#                 cursor = stop
+
+#             if (solver.status == "running"
+#                     and perf_counter() - started >= timeout):
+#                 status = "timeout"
+#                 break
+
+#     except (ValueError, FloatingPointError, OverflowError, RuntimeError) as exc:
+#         status, message = "solver_failed", str(exc)
+
+#     # 9. 进行原有的诊断并保持返回格式不变
+#     first_anomaly, first_by_check, finite_samples = curve_diagnostics(
+#         times, h, density
+#     )
+
+#     return dict(
+#         h=h,
+#         density=density,
+#         h_from_sum=h_sum,
+#         status=status,
+#         message=message,
+#         last_time=last,
+#         first_anomaly=first_anomaly,
+#         first_by_check=first_by_check,
+#         finite_samples=finite_samples,
+#         seconds=perf_counter() - started
+#     )
 
 
 def curve_diagnostics(times, h, density):

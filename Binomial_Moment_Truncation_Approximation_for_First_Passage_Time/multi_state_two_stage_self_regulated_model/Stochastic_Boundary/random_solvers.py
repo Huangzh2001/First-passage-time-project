@@ -45,28 +45,98 @@ def sample_hits(model, boundary, horizon, paths, dt, seed):
     return np.sort(hits)
 
 
-def solve_moments(model, boundary, times, gamma, L, K, N, quadrature=96):
-    """R.3 + R.17 的有限基展开；分子顶部修正复用原 build_operator。"""
+# def solve_moments(model, boundary, times, gamma, L, K, N, quadrature=96):
+#     """R.3 + R.17 的有限基展开；分子顶部修正复用原 build_operator。"""
+#     if gamma <= 0 or N < 1 or quadrature < N:
+#         raise ValueError("Require gamma > 0 and quadrature >= N >= 1")
+#     Q, m, n, initial = build_operator(model.rates, model.states, model.initial, L, K)
+#     x, weights, phi, eigenvalues = boundary.basis(N, quadrature)
+#     g = boundary.g(m[:, None], n[:, None], x[None, :])
+#     potential = gamma * np.exp(gamma * g / (1 + np.abs(g)) + (m[:, None] + n[:, None]) / gamma)
+#     killing = np.einsum('qa,cq,qb,q->cab', phi, potential, phi, weights)
+#     operator = (kron(Q, eye(N)) - kron(eye(len(m)), diags(eigenvalues))
+#                 - block_diag(killing)).tocsc()
+#     z0 = np.zeros((len(m), N))
+#     z0[:, 0] = initial
+#     solution = solve_ivp(lambda t, z: operator @ z, (times[0], times[-1]),
+#                          z0.ravel(), t_eval=times, method='BDF', jac=operator,
+#                          rtol=2e-8, atol=1e-11)
+#     if not solution.success:
+#         raise RuntimeError(solution.message)
+#     z = solution.y.reshape(len(m), N, len(times))
+#     survival = z[:, 0].sum(axis=0)
+#     density = np.einsum('cb,cbt->t', killing[:, 0, :], z)
+#     valid = bool(np.isfinite(survival).all() and np.isfinite(density).all()
+#                  and survival.min() >= -1e-5 and survival.max() <= 1 + 1e-5
+#                  and np.diff(survival).max() <= 1e-5 and density.min() >= -1e-5)
+#     return survival, density, valid
+
+def solve_moments(model, boundary, times, gamma, L, K, N, quadrature=96, *,
+                  criterion=None):
+    """求解式 (R.26a)。criterion 可传入显含时间的 g(t, m, n, x)。"""
     if gamma <= 0 or N < 1 or quadrature < N:
         raise ValueError("Require gamma > 0 and quadrature >= N >= 1")
-    Q, m, n, initial = build_operator(model.rates, model.states, model.initial, L, K)
+
+    Q, m, n, initial = build_operator(
+        model.rates, model.states, model.initial, L, K
+    )
+
+
     x, weights, phi, eigenvalues = boundary.basis(N, quadrature)
-    g = boundary.g(m[:, None], n[:, None], x[None, :])
-    potential = gamma * np.exp(gamma * g / (1 + np.abs(g)) + (m[:, None] + n[:, None]) / gamma)
-    killing = np.einsum('qa,cq,qb,q->cab', phi, potential, phi, weights)
-    operator = (kron(Q, eye(N)) - kron(eye(len(m)), diags(eigenvalues))
-                - block_diag(killing)).tocsc()
+    m_grid, n_grid, x_grid = m[:, None], n[:, None], x[None, :]
+
+    # 分子反应和随机边界自身的演化。
+    base = (
+        kron(Q, eye(N))
+        - kron(eye(len(m)), diags(eigenvalues))
+    ).tocsc()
+
+    # 按当前时间计算式 (R.26a) 中的杀死矩阵 K_mn(t)。
+    def killing_at(t):
+        if criterion is None:
+            values = boundary.g(t=t, m=m_grid, n=n_grid, x=x_grid)
+        else:
+            values = criterion(t, m_grid, n_grid, x_grid)
+
+        g = np.broadcast_to(values, (len(m), len(x)))
+        potential = gamma * np.exp(
+            gamma * g / (1 + np.abs(g)) + (m_grid + n_grid) / gamma
+        )
+        return np.einsum('qa,cq,qb,q->cab', phi, potential, phi, weights)
+
+    def rhs(t, state):
+        coefficients = state.reshape(len(m), N)
+        loss = np.einsum('cab,cb->ca', killing_at(t), coefficients)
+        return base @ state - loss.ravel()
+
+    def jacobian(t, _state):
+        return base - block_diag(killing_at(t), format='csc')
+
     z0 = np.zeros((len(m), N))
     z0[:, 0] = initial
-    solution = solve_ivp(lambda t, z: operator @ z, (times[0], times[-1]),
-                         z0.ravel(), t_eval=times, method='BDF', jac=operator,
-                         rtol=2e-8, atol=1e-11)
+
+    solution = solve_ivp(
+        rhs, (times[0], times[-1]), z0.ravel(),
+        t_eval=times, method='BDF', jac=jacobian, rtol=2e-8, atol=1e-11,
+    )
     if not solution.success:
         raise RuntimeError(solution.message)
+
     z = solution.y.reshape(len(m), N, len(times))
-    survival = z[:, 0].sum(axis=0)
-    density = np.einsum('cb,cbt->t', killing[:, 0, :], z)
-    valid = bool(np.isfinite(survival).all() and np.isfinite(density).all()
-                 and survival.min() >= -1e-5 and survival.max() <= 1 + 1e-5
-                 and np.diff(survival).max() <= 1e-5 and density.min() >= -1e-5)
+    survival = z[:, 0, :].sum(axis=0)
+    density = np.array([
+        np.sum(killing_at(t)[:, 0, :] * z[:, :, j])
+        for j, t in enumerate(times)
+    ])
+
+    valid = bool(
+        np.isfinite(survival).all()
+        and np.isfinite(density).all()
+        and survival.min() >= -1e-5
+        and survival.max() <= 1 + 1e-5
+        and np.all(np.diff(survival) <= 1e-5)
+        and density.min() >= -1e-5
+    )
     return survival, density, valid
+
+
